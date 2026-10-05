@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerenciamento Central de Alertas</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; }
+        .cabecalho { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .menu { margin-bottom: 20px; }
+        .btn-menu { padding: 10px 20px; font-size: 1rem; cursor: pointer; background: #333; color: white; border: none; border-radius: 5px; margin-right: 10px; }
+        .btn-sair { background: #ff3333; }
+        .aba { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .aba.ativa { display: block; }
+        .card { border-left: 5px solid #ff3333; background: #fff3f3; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-atender { background: #4CAF50; color: white; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        .btn-salvar { background: #2196F3; color: white; border: none; padding: 10px 15px; font-weight: bold; cursor: pointer; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #333; color: white; }
+        .form-grupo { margin-bottom: 15px; }
+        .form-grupo input, .form-grupo select { padding: 10px; width: 300px; border-radius: 5px; border: 1px solid #ccc; }
+        .select-agente { padding: 10px; border-radius: 5px; border: 1px solid #ccc; font-size: 1rem; margin-right: 10px; }
+    </style>
+</head>
+<body>
+
+    <!-- TRAVA DE SEGURANÇA -->
+    <script>
+        const usuarioLogado = localStorage.getItem('usuarioLogado');
+        const perfilUsuario = localStorage.getItem('perfilUsuario');
+        
+        if (!usuarioLogado) {
+            window.location.href = 'login.html';
+        }
+    </script>
+
+    <div class="cabecalho">
+        <h1>Painel Gerencial</h1>
+        <div>
+            <strong>Logado como: </strong> <span id="nome-usuario-tela"></span>
+            <button class="btn-menu btn-sair" onclick="sair()">Sair</button>
+        </div>
+    </div>
+    
+    <div class="menu">
+        <button class="btn-menu" onclick="mudarAba('aba-ativos')">Alertas Ativos</button>
+        <button class="btn-menu" onclick="mudarAba('aba-historico')">Histórico Completo</button>
+        <button class="btn-menu" id="btn-usuarios" style="display: none; background: #0056b3;" onclick="mudarAba('aba-usuarios')">Gerenciar Equipe</button>
+    </div>
+
+    <!-- ABA 1: ALERTAS ATIVOS -->
+    <div id="aba-ativos" class="aba ativa">
+        <h2>Aguardando Atendimento</h2>
+        <div id="lista-ativos"></div>
+    </div>
+
+    <!-- ABA 2: HISTÓRICO -->
+    <div id="aba-historico" class="aba">
+        <h2>Auditoria de Alertas</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Horário</th>
+                    <th>Setor</th>
+                    <th>Máquina</th>
+                    <th>Usuário AD</th>
+                    <th>Status</th>
+                    <th>Agente Resposta</th>
+                    <th>SLA (Tempo Resposta)</th>
+                </tr>
+            </thead>
+            <tbody id="tabela-historico"></tbody>
+        </table>
+    </div>
+
+    <!-- ABA 3: GERENCIAR EQUIPE (Só Master) -->
+    <div id="aba-usuarios" class="aba">
+        
+        <!-- SEÇÃO: OPERADORES DO SISTEMA -->
+        <h2>Cadastrar Operador do Sistema</h2>
+        <div class="form-grupo">
+            <input type="text" id="novo-nome" placeholder="Nome Completo">
+        </div>
+        <div class="form-grupo">
+            <input type="text" id="novo-login" placeholder="Login de Acesso">
+        </div>
+        <div class="form-grupo">
+            <input type="password" id="novo-senha" placeholder="Senha">
+        </div>
+        <div class="form-grupo">
+            <select id="novo-perfil">
+                <option value="AGENTE">Agente Operador (Padrão)</option>
+                <option value="MASTER">Administrador Master</option>
+            </select>
+        </div>
+        <button class="btn-salvar" onclick="cadastrarUsuario()">➕ Salvar Operador</button>
+        
+        <h3 style="margin-top: 20px;">Operadores Cadastrados</h3>
+        <table>
+            <thead><tr><th>ID</th><th>Nome</th><th>Login</th><th>Perfil</th><th>Ações</th></tr></thead>
+            <tbody id="tabela-usuarios"></tbody>
+        </table>
+
+        <hr style="margin: 40px 0; border: 1px solid #ccc;">
+
+        <!-- SEÇÃO: EQUIPE FÍSICA (NOVO) -->
+        <h2>Cadastrar Segurança Físico (Equipe de Campo)</h2>
+        <div class="form-grupo">
+            <input type="text" id="novo-nome-seguranca" placeholder="Nome do Agente (Ex: Carlos Silva)">
+        </div>
+        <button class="btn-salvar" style="background: #ff9800;" onclick="cadastrarSeguranca()">👮 Salvar Agente Físico</button>
+        
+        <h3 style="margin-top: 20px;">Agentes Físicos Cadastrados</h3>
+        <table>
+            <thead><tr><th>ID</th><th>Nome</th></tr></thead>
+            <tbody id="tabela-segurancas"></tbody>
+        </table>
+
+    </div>
+
+    <script>
+        document.getElementById('nome-usuario-tela').innerText = usuarioLogado;
+        if (perfilUsuario === 'MASTER') {
+            document.getElementById('btn-usuarios').style.display = 'inline-block';
+        }
+
+        // Variável global para armazenar a lista de seguranças e gerar o dropdown
+        let opcoesSegurancasHTML = '<option value="">Selecione o agente físico...</option>';
+
+        function sair() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        function mudarAba(idAba) {
+            document.querySelectorAll('.aba').forEach(aba => aba.classList.remove('ativa'));
+            document.getElementById(idAba).classList.add('ativa');
+            
+            if(idAba === 'aba-historico') { carregarHistorico(); } 
+            else if(idAba === 'aba-ativos') { carregarPendentes(); }
+            else if(idAba === 'aba-usuarios') { listarUsuarios(); listarSegurancas(); }
+        }
+
+        // --- FUNÇÕES DA EQUIPE FÍSICA E DROPDOWN ---
+        async function carregarCacheSegurancas() {
+            try {
+                const res = await fetch('http://GETIN-D19:8080/api/segurancas');
+                const segurancas = await res.json();
+                opcoesSegurancasHTML = '<option value="">Selecione o agente físico...</option>';
+                segurancas.forEach(s => {
+                    opcoesSegurancasHTML += `<option value="${s.nome}">${s.nome}</option>`;
+                });
+            } catch (erro) { console.error("Erro ao carregar seguranças no cache", erro); }
+        }
+
+        async function cadastrarSeguranca() {
+            const nome = document.getElementById('novo-nome-seguranca').value;
+            if(!nome) { alert("Preencha o nome do agente físico!"); return; }
+
+            const res = await fetch('http://GETIN-D19:8080/api/segurancas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome })
+            });
+
+            if (res.ok) {
+                alert("Agente físico cadastrado com sucesso!");
+                document.getElementById('novo-nome-seguranca').value = '';
+                listarSegurancas();
+                carregarCacheSegurancas(); // Atualiza os dropdowns imediatamente
+            }
+        }
+
+        async function listarSegurancas() {
+            const res = await fetch('http://GETIN-D19:8080/api/segurancas');
+            const segurancas = await res.json();
+            const tbody = document.getElementById('tabela-segurancas');
+            tbody.innerHTML = '';
+            
+            segurancas.forEach(s => {
+                tbody.innerHTML += `<tr><td>${s.id}</td><td><b>${s.nome}</b></td></tr>`;
+            });
+        }
+
+        // --- FUNÇÕES DOS ALERTAS ---
+        async function carregarPendentes() {
+            if(!document.getElementById('aba-ativos').classList.contains('ativa')) return;
+            const res = await fetch('http://GETIN-D19:8080/api/alertas/pendentes');
+            const alertas = await res.json();
+            const divLista = document.getElementById('lista-ativos');
+            
+            // Salva a seleção atual antes de redesenhar para o usuário não perder o que clicou
+            const selecoesAtuais = {};
+            document.querySelectorAll('.select-agente').forEach(select => {
+                selecoesAtuais[select.id] = select.value;
+            });
+
+            divLista.innerHTML = '';
+            if(alertas.length === 0) {
+                divLista.innerHTML = '<p>Nenhum alerta ativo.</p>';
+                return;
+            }
+            alertas.forEach(alerta => {
+                divLista.innerHTML += `
+                    <div class="card">
+                        <div>
+                            <strong>Setor:</strong> ${alerta.setor} <br>
+                            <small>Máquina: ${alerta.nomeMaquina} | Usuário: ${alerta.usuarioAd} | ID: ${alerta.id}</small>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <select id="seguranca-alerta-${alerta.id}" class="select-agente">
+                                ${opcoesSegurancasHTML}
+                            </select>
+                            <button class="btn-atender" onclick="atenderChamado(${alerta.id})">✅ Marcar como Resolvido</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Restaura as seleções que estavam em andamento
+            for (const idSelect in selecoesAtuais) {
+                const selectElement = document.getElementById(idSelect);
+                if (selectElement && selecoesAtuais[idSelect] !== "") {
+                    selectElement.value = selecoesAtuais[idSelect];
+                }
+            }
+        }
+
+        async function atenderChamado(id) {
+            // Pega o valor do dropdown exato deste cartão
+            const selectElement = document.getElementById(`seguranca-alerta-${id}`);
+            const agenteFisico = selectElement.value;
+
+            if (!agenteFisico) {
+                alert("Por favor, selecione qual agente de segurança foi ao local!");
+                return;
+            }
+
+            const operadorLogado = localStorage.getItem('usuarioLogado');
+            const registroFinal = `${agenteFisico} (Baixa no sistema por: ${operadorLogado})`;
+
+            await fetch(`http://GETIN-D19:8080/api/alertas/${id}/atender?agente=${encodeURIComponent(registroFinal)}`, {
+                method: 'PUT'
+            });
+            carregarPendentes();
+        }
+
+        async function carregarHistorico() {
+            const res = await fetch('http://GETIN-D19:8080/api/alertas/historico');
+            const historico = await res.json();
+            const tbody = document.getElementById('tabela-historico');
+            tbody.innerHTML = '';
+            historico.forEach(alerta => {
+                const dataFormatada = new Date(alerta.dataHora).toLocaleString('pt-BR');
+                const statusColor = alerta.statusAtendimento === 'ATENDIDO' ? 'green' : 'red';
+                const agente = alerta.agenteAtendimento ? alerta.agenteAtendimento : '-';
+                
+                let textoSla = "Em andamento";
+                if (alerta.tempoRespostaSegundos !== null) {
+                    const minutos = Math.floor(alerta.tempoRespostaSegundos / 60);
+                    const segundosRestantes = alerta.tempoRespostaSegundos % 60;
+                    textoSla = `${minutos} min e ${segundosRestantes} seg`;
+                }
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${alerta.id}</td>
+                        <td>${dataFormatada}</td>
+                        <td>${alerta.setor}</td>
+                        <td>${alerta.nomeMaquina}</td>
+                        <td>${alerta.usuarioAd}</td>
+                        <td style="color: ${statusColor}; font-weight: bold;">${alerta.statusAtendimento}</td>
+                        <td>${agente}</td>
+                        <td style="font-weight: bold;">${textoSla}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // --- FUNÇÕES DE OPERADORES ---
+        async function cadastrarUsuario() {
+            const nome = document.getElementById('novo-nome').value;
+            const login = document.getElementById('novo-login').value;
+            const senha = document.getElementById('novo-senha').value;
+            const perfil = document.getElementById('novo-perfil').value;
+
+            if(!nome || !login || !senha) { alert("Preencha todos os campos do operador!"); return; }
+
+            const res = await fetch('http://GETIN-D19:8080/api/usuarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nome, login, senha, perfil })
+            });
+
+            if (res.ok) {
+                alert("Operador cadastrado com sucesso!");
+                document.getElementById('novo-nome').value = '';
+                document.getElementById('novo-login').value = '';
+                document.getElementById('novo-senha').value = '';
+                listarUsuarios();
+            } else { alert("Erro: " + await res.text()); }
+        }
+
+        async function listarUsuarios() {
+            const res = await fetch('http://GETIN-D19:8080/api/usuarios');
+            const usuarios = await res.json();
+            const tbody = document.getElementById('tabela-usuarios');
+            tbody.innerHTML = '';
+            
+            usuarios.forEach(u => {
+                const botaoSenha = (u.nome !== usuarioLogado) 
+                    ? `<button style="background: #ff9800; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 3px;" onclick="trocarSenha(${u.id}, '${u.nome}')">🔑 Resetar Senha</button>` 
+                    : '<span style="color: gray; font-size: 0.9em;">(Você)</span>';
+
+                tbody.innerHTML += `<tr><td>${u.id}</td><td>${u.nome}</td><td>${u.login}</td><td><b>${u.perfil}</b></td><td>${botaoSenha}</td></tr>`;
+            });
+        }
+
+        async function trocarSenha(id, nome) {
+            const novaSenha = prompt(`Digite a NOVA SENHA para o agente ${nome}:`);
+            if (!novaSenha) return; 
+
+            try {
+                const res = await fetch(`http://GETIN-D19:8080/api/usuarios/${id}/senha?novaSenha=${encodeURIComponent(novaSenha)}`, { method: 'PUT' });
+                if (res.ok) { alert(`Senha alterada com sucesso!`); } 
+                else { alert("Erro ao alterar a senha."); }
+            } catch (erro) { alert("Erro de comunicação."); }
+        }
+
+        // Inicialização
+        carregarCacheSegurancas();
+        carregarPendentes();
+        setInterval(carregarPendentes, 3000);
+    </script>
+</body>
+</html>
